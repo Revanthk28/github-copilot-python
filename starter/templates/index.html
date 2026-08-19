@@ -1,33 +1,127 @@
 <!doctype html>
-<html>
+<html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>Sudoku Game</title>
+
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 
 <body>
-  <h1>Sudoku Game</h1>
 
-  <div class="difficulty-control">
-    <label for="difficulty">Difficulty:</label>
+  <main class="game-container">
 
-    <select id="difficulty">
-      <option value="easy">Easy</option>
-      <option value="medium" selected>Medium</option>
-      <option value="hard">Hard</option>
-    </select>
-  </div>
+    <div class="top-bar">
+      <h1>Sudoku Game</h1>
 
-  <div id="sudoku-board"></div>
+      <button id="dark-mode-toggle" class="dark-mode-button">
+        🌙 Dark Mode
+      </button>
+    </div>
 
-  <div class="controls">
-    <button id="new-game">New Game</button>
-    <button id="check-solution">Check Solution</button>
-    <span id="message"></span>
-  </div>
+    <!-- Player Name -->
+    <div class="player-control">
+      <label for="player-name">Player Name:</label>
+
+      <input
+        type="text"
+        id="player-name"
+        placeholder="Enter your name"
+        maxlength="30"
+      >
+    </div>
+
+    <!-- Difficulty -->
+    <div class="difficulty-control">
+
+      <label for="difficulty">
+        Difficulty:
+      </label>
+
+      <select id="difficulty">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+
+    </div>
+
+    <!-- Timer -->
+    <div id="timer">
+      Time: 00:00
+    </div>
+
+    <!-- Hint Counter -->
+    <div id="hint-count">
+      Hints: 0
+    </div>
+
+    <!-- Sudoku Board -->
+    <div id="sudoku-board"></div>
+
+    <!-- Game Controls -->
+    <div class="controls">
+
+      <button id="new-game">
+        New Game
+      </button>
+
+      <button id="hint">
+        Hint
+      </button>
+
+      <button id="check-solution">
+        Check Solution
+      </button>
+
+      <span
+        id="message"
+        aria-live="polite">
+      </span>
+
+    </div>
+
+    <!-- Top 10 Scoreboard -->
+    <section class="scoreboard">
+
+      <h2>🏆 Top 10 Scores</h2>
+
+      <table id="score-table">
+
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Time</th>
+            <th>Difficulty</th>
+            <th>Hints</th>
+          </tr>
+        </thead>
+
+        <tbody id="score-list">
+        </tbody>
+
+      </table>
+
+      <p id="no-scores">
+        No completed games yet.
+      </p>
+
+      <button
+        id="clear-scores"
+        class="clear-button">
+        Clear Scores
+      </button>
+
+    </section>
+
+  </main>
 
   <script src="/static/main.js"></script>
+
 </body>
+
 </html>

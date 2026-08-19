@@ -1,170 +1,827 @@
-// Client-side rendering and interaction for the Flask-backed Sudoku
-
 const SIZE = 9;
 
-let puzzle = [];
+const SCORE_STORAGE_KEY = 'sudokuTop10';
+const DARK_MODE_KEY = 'sudokuDarkMode';
 
+let puzzle = [];
+let timerInterval = null;
+let elapsedSeconds = 0;
+let hintsUsed = 0;
+let gameCompleted = false;
+
+
+// ========================================
+// DARK MODE
+// ========================================
+
+function initializeDarkMode() {
+
+    const savedMode =
+        localStorage.getItem(DARK_MODE_KEY);
+
+    if (savedMode === 'dark') {
+        document.body.classList.add('dark-mode');
+    }
+
+    updateDarkModeButton();
+}
+
+
+function toggleDarkMode() {
+
+    document.body.classList.toggle('dark-mode');
+
+    const isDark =
+        document.body.classList.contains('dark-mode');
+
+    localStorage.setItem(
+        DARK_MODE_KEY,
+        isDark ? 'dark' : 'light'
+    );
+
+    updateDarkModeButton();
+}
+
+
+function updateDarkModeButton() {
+
+    const button =
+        document.getElementById('dark-mode-toggle');
+
+    if (!button) {
+        return;
+    }
+
+    const isDark =
+        document.body.classList.contains('dark-mode');
+
+    if (isDark) {
+        button.innerText = '☀️ Light Mode';
+    } else {
+        button.innerText = '🌙 Dark Mode';
+    }
+}
+
+
+// ========================================
+// TIMER
+// ========================================
+
+function startTimer() {
+
+    stopTimer();
+
+    elapsedSeconds = 0;
+
+    updateTimer();
+
+    timerInterval = setInterval(() => {
+
+        elapsedSeconds++;
+
+        updateTimer();
+
+    }, 1000);
+}
+
+
+function stopTimer() {
+
+    if (timerInterval !== null) {
+
+        clearInterval(timerInterval);
+
+        timerInterval = null;
+    }
+}
+
+
+function updateTimer() {
+
+    const minutes =
+        Math.floor(elapsedSeconds / 60);
+
+    const seconds =
+        elapsedSeconds % 60;
+
+    const timer =
+        document.getElementById('timer');
+
+    if (timer) {
+
+        timer.innerText =
+            `Time: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+}
+
+
+// ========================================
+// FORMAT TIME
+// ========================================
+
+function formatTime(totalSeconds) {
+
+    const minutes =
+        Math.floor(totalSeconds / 60);
+
+    const seconds =
+        totalSeconds % 60;
+
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+
+// ========================================
+// CREATE SUDOKU BOARD
+// ========================================
 
 function createBoardElement() {
-  const boardDiv = document.getElementById('sudoku-board');
 
-  boardDiv.innerHTML = '';
+    const boardDiv =
+        document.getElementById('sudoku-board');
 
-  for (let i = 0; i < SIZE; i++) {
-    const rowDiv = document.createElement('div');
+    boardDiv.innerHTML = '';
 
-    rowDiv.className = 'sudoku-row';
+    for (let i = 0; i < SIZE; i++) {
 
-    for (let j = 0; j < SIZE; j++) {
-      const input = document.createElement('input');
+        const rowDiv =
+            document.createElement('div');
 
-      input.type = 'text';
-      input.maxLength = 1;
-      input.className = 'sudoku-cell';
+        rowDiv.className =
+            'sudoku-row';
 
-      input.dataset.row = i;
-      input.dataset.col = j;
+        for (let j = 0; j < SIZE; j++) {
 
-      input.addEventListener('input', (e) => {
-        const val = e.target.value.replace(/[^1-9]/g, '');
-        e.target.value = val;
-      });
+            const input =
+                document.createElement('input');
 
-      rowDiv.appendChild(input);
+            input.type = 'text';
+
+            input.maxLength = 1;
+
+            input.className =
+                'sudoku-cell';
+
+            input.dataset.row = i;
+            input.dataset.col = j;
+
+            input.setAttribute(
+                'aria-label',
+                `Row ${i + 1}, Column ${j + 1}`
+            );
+
+            input.addEventListener(
+                'input',
+                (event) => {
+
+                    const value =
+                        event.target.value
+                            .replace(/[^1-9]/g, '');
+
+                    event.target.value =
+                        value;
+                }
+            );
+
+            rowDiv.appendChild(input);
+        }
+
+        boardDiv.appendChild(rowDiv);
     }
-
-    boardDiv.appendChild(rowDiv);
-  }
 }
 
+
+// ========================================
+// RENDER PUZZLE
+// ========================================
 
 function renderPuzzle(puz) {
-  puzzle = puz;
 
-  createBoardElement();
+    puzzle = puz;
 
-  const boardDiv = document.getElementById('sudoku-board');
-  const inputs = boardDiv.getElementsByTagName('input');
+    createBoardElement();
 
-  for (let i = 0; i < SIZE; i++) {
-    for (let j = 0; j < SIZE; j++) {
-      const idx = i * SIZE + j;
+    const inputs =
+        document
+            .getElementById('sudoku-board')
+            .getElementsByTagName('input');
 
-      const val = puzzle[i][j];
-      const inp = inputs[idx];
+    for (let i = 0; i < SIZE; i++) {
 
-      if (val !== 0) {
-        inp.value = val;
-        inp.disabled = true;
-        inp.className += ' prefilled';
-      } else {
-        inp.value = '';
-        inp.disabled = false;
-      }
+        for (let j = 0; j < SIZE; j++) {
+
+            const index =
+                i * SIZE + j;
+
+            const value =
+                puzzle[i][j];
+
+            const input =
+                inputs[index];
+
+            if (value !== 0) {
+
+                input.value =
+                    value;
+
+                input.disabled =
+                    true;
+
+                input.className =
+                    'sudoku-cell prefilled';
+
+            } else {
+
+                input.value = '';
+
+                input.disabled =
+                    false;
+
+                input.className =
+                    'sudoku-cell';
+            }
+        }
     }
-  }
 }
 
+
+// ========================================
+// NEW GAME
+// ========================================
 
 async function newGame() {
-  const difficulty = document.getElementById('difficulty').value;
 
-  const res = await fetch(`/new?difficulty=${difficulty}`);
-  const data = await res.json();
+    const difficultySelect =
+        document.getElementById('difficulty');
 
-  if (data.error) {
-    const msg = document.getElementById('message');
+    const difficulty =
+        difficultySelect
+            ? difficultySelect.value
+            : 'medium';
 
-    msg.style.color = '#d32f2f';
-    msg.innerText = data.error;
+    try {
 
-    return;
-  }
+        const response =
+            await fetch(
+                `/new?difficulty=${difficulty}`
+            );
 
-  renderPuzzle(data.puzzle);
+        if (!response.ok) {
 
-  document.getElementById('message').innerText = '';
+            throw new Error(
+                'Unable to start game'
+            );
+        }
+
+        const data =
+            await response.json();
+
+        renderPuzzle(
+            data.puzzle
+        );
+
+        hintsUsed = 0;
+
+        gameCompleted = false;
+
+        updateHintCount();
+
+        const message =
+            document.getElementById('message');
+
+        message.innerText = '';
+
+        message.style.color =
+            '';
+
+        startTimer();
+
+    } catch (error) {
+
+        document.getElementById(
+            'message'
+        ).innerText =
+            'Unable to start a new game.';
+    }
 }
 
+
+// ========================================
+// HINT
+// ========================================
+
+async function useHint() {
+
+    if (gameCompleted) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch('/hint', {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json'
+                }
+            });
+
+        const data =
+            await response.json();
+
+        const message =
+            document.getElementById(
+                'message'
+            );
+
+        if (data.error) {
+
+            message.style.color =
+                '#d32f2f';
+
+            message.innerText =
+                data.error;
+
+            return;
+        }
+
+        const inputs =
+            document
+                .getElementById(
+                    'sudoku-board'
+                )
+                .getElementsByTagName(
+                    'input'
+                );
+
+        const index =
+            data.row * SIZE +
+            data.col;
+
+        const input =
+            inputs[index];
+
+        input.value =
+            data.value;
+
+        input.disabled =
+            true;
+
+        input.className =
+            'sudoku-cell prefilled hint-cell';
+
+        puzzle[data.row][data.col] =
+            data.value;
+
+        hintsUsed =
+            data.hints;
+
+        updateHintCount();
+
+        message.style.color =
+            '#1976d2';
+
+        message.innerText =
+            `Hint used. Hints: ${hintsUsed}`;
+
+    } catch (error) {
+
+        document.getElementById(
+            'message'
+        ).innerText =
+            'Unable to use hint.';
+    }
+}
+
+
+function updateHintCount() {
+
+    const hintCount =
+        document.getElementById(
+            'hint-count'
+        );
+
+    if (hintCount) {
+
+        hintCount.innerText =
+            `Hints: ${hintsUsed}`;
+    }
+}
+
+
+// ========================================
+// CHECK SOLUTION
+// ========================================
 
 async function checkSolution() {
-  const boardDiv = document.getElementById('sudoku-board');
 
-  const inputs = boardDiv.getElementsByTagName('input');
-
-  const board = [];
-
-  for (let i = 0; i < SIZE; i++) {
-    board[i] = [];
-
-    for (let j = 0; j < SIZE; j++) {
-      const idx = i * SIZE + j;
-
-      const val = inputs[idx].value;
-
-      board[i][j] = val ? parseInt(val, 10) : 0;
-    }
-  }
-
-  const res = await fetch('/check', {
-    method: 'POST',
-
-    headers: {
-      'Content-Type': 'application/json'
-    },
-
-    body: JSON.stringify({ board })
-  });
-
-  const data = await res.json();
-
-  const msg = document.getElementById('message');
-
-  if (data.error) {
-    msg.style.color = '#d32f2f';
-    msg.innerText = data.error;
-
-    return;
-  }
-
-  const incorrect = new Set(
-    data.incorrect.map(x => x[0] * SIZE + x[1])
-  );
-
-  for (let idx = 0; idx < inputs.length; idx++) {
-    const inp = inputs[idx];
-
-    if (inp.disabled) {
-      continue;
+    if (gameCompleted) {
+        return;
     }
 
-    inp.className = 'sudoku-cell';
+    const inputs =
+        document
+            .getElementById(
+                'sudoku-board'
+            )
+            .getElementsByTagName(
+                'input'
+            );
 
-    if (incorrect.has(idx)) {
-      inp.className = 'sudoku-cell incorrect';
+    const board = [];
+
+    for (let i = 0; i < SIZE; i++) {
+
+        board[i] = [];
+
+        for (let j = 0; j < SIZE; j++) {
+
+            const index =
+                i * SIZE + j;
+
+            const value =
+                inputs[index].value;
+
+            board[i][j] =
+                value
+                    ? parseInt(
+                        value,
+                        10
+                    )
+                    : 0;
+        }
     }
-  }
 
-  if (incorrect.size === 0) {
-    msg.style.color = '#388e3c';
-    msg.innerText = 'Congratulations! You solved it!';
-  } else {
-    msg.style.color = '#d32f2f';
-    msg.innerText = 'Some cells are incorrect.';
-  }
+    try {
+
+        const response =
+            await fetch('/check', {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json'
+                },
+                body: JSON.stringify({
+                    board: board
+                })
+            });
+
+        const data =
+            await response.json();
+
+        const message =
+            document.getElementById(
+                'message'
+            );
+
+        if (data.error) {
+
+            message.style.color =
+                '#d32f2f';
+
+            message.innerText =
+                data.error;
+
+            return;
+        }
+
+        const incorrect =
+            new Set(
+                data.incorrect.map(
+                    cell =>
+                        cell[0] * SIZE +
+                        cell[1]
+                )
+            );
+
+        for (
+            let index = 0;
+            index < inputs.length;
+            index++
+        ) {
+
+            const input =
+                inputs[index];
+
+            if (input.disabled) {
+                continue;
+            }
+
+            input.className =
+                'sudoku-cell';
+
+            if (incorrect.has(index)) {
+
+                input.className =
+                    'sudoku-cell incorrect';
+            }
+        }
+
+        if (incorrect.size === 0) {
+
+            stopTimer();
+
+            gameCompleted = true;
+
+            message.style.color =
+                '#388e3c';
+
+            message.innerText =
+                'Congratulations! You solved it!';
+
+            saveCompletedGame();
+
+        } else {
+
+            message.style.color =
+                '#d32f2f';
+
+            message.innerText =
+                'Some cells are incorrect.';
+        }
+
+    } catch (error) {
+
+        document.getElementById(
+            'message'
+        ).innerText =
+            'Unable to check the solution.';
+    }
 }
 
 
-// Wire buttons and initialize the first game
-window.addEventListener('load', () => {
-  document
-    .getElementById('new-game')
-    .addEventListener('click', newGame);
+// ========================================
+// TOP 10 SCOREBOARD
+// ========================================
 
-  document
-    .getElementById('check-solution')
-    .addEventListener('click', checkSolution);
+function getScores() {
 
-  // Initialize the first game
-  newGame();
-});
+    try {
+
+        const storedScores =
+            localStorage.getItem(
+                SCORE_STORAGE_KEY
+            );
+
+        if (!storedScores) {
+            return [];
+        }
+
+        const scores =
+            JSON.parse(
+                storedScores
+            );
+
+        return Array.isArray(scores)
+            ? scores
+            : [];
+
+    } catch (error) {
+
+        return [];
+    }
+}
+
+
+function saveScores(scores) {
+
+    localStorage.setItem(
+        SCORE_STORAGE_KEY,
+        JSON.stringify(scores)
+    );
+}
+
+
+function saveCompletedGame() {
+
+    const playerInput =
+        document.getElementById(
+            'player-name'
+        );
+
+    let playerName =
+        playerInput.value.trim();
+
+    if (!playerName) {
+        playerName = 'Player';
+    }
+
+    const difficulty =
+        document.getElementById(
+            'difficulty'
+        ).value;
+
+    const newScore = {
+
+        player: playerName,
+
+        time: elapsedSeconds,
+
+        difficulty: difficulty,
+
+        hints: hintsUsed
+    };
+
+    let scores =
+        getScores();
+
+    scores.push(
+        newScore
+    );
+
+    scores.sort(
+        (a, b) => {
+
+            if (a.time !== b.time) {
+                return a.time - b.time;
+            }
+
+            return a.hints - b.hints;
+        }
+    );
+
+    scores =
+        scores.slice(0, 10);
+
+    saveScores(scores);
+
+    renderScores();
+
+    const message =
+        document.getElementById(
+            'message'
+        );
+
+    message.innerText =
+        `Congratulations! Score saved: ${formatTime(elapsedSeconds)}`;
+}
+
+
+function renderScores() {
+
+    const scoreList =
+        document.getElementById(
+            'score-list'
+        );
+
+    const noScores =
+        document.getElementById(
+            'no-scores'
+        );
+
+    const scores =
+        getScores();
+
+    scoreList.innerHTML = '';
+
+    if (scores.length === 0) {
+
+        noScores.style.display =
+            'block';
+
+        return;
+    }
+
+    noScores.style.display =
+        'none';
+
+    scores.forEach(
+        (score, index) => {
+
+            const row =
+                document.createElement(
+                    'tr'
+                );
+
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${escapeHtml(score.player)}</td>
+                <td>${formatTime(score.time)}</td>
+                <td>${capitalize(score.difficulty)}</td>
+                <td>${score.hints}</td>
+            `;
+
+            scoreList.appendChild(row);
+        }
+    );
+}
+
+
+function clearScores() {
+
+    const confirmed =
+        window.confirm(
+            'Are you sure you want to clear all Top 10 scores?'
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    localStorage.removeItem(
+        SCORE_STORAGE_KEY
+    );
+
+    renderScores();
+}
+
+
+function escapeHtml(value) {
+
+    const div =
+        document.createElement(
+            'div'
+        );
+
+    div.textContent =
+        value;
+
+    return div.innerHTML;
+}
+
+
+function capitalize(value) {
+
+    if (!value) {
+        return '';
+    }
+
+    return value.charAt(0).toUpperCase() +
+        value.slice(1);
+}
+
+
+// ========================================
+// INITIALIZE
+// ========================================
+
+window.addEventListener(
+    'load',
+    () => {
+
+        initializeDarkMode();
+
+        document
+            .getElementById(
+                'dark-mode-toggle'
+            )
+            .addEventListener(
+                'click',
+                toggleDarkMode
+            );
+
+        document
+            .getElementById(
+                'new-game'
+            )
+            .addEventListener(
+                'click',
+                newGame
+            );
+
+        document
+            .getElementById(
+                'hint'
+            )
+            .addEventListener(
+                'click',
+                useHint
+            );
+
+        document
+            .getElementById(
+                'check-solution'
+            )
+            .addEventListener(
+                'click',
+                checkSolution
+            );
+
+        document
+            .getElementById(
+                'clear-scores'
+            )
+            .addEventListener(
+                'click',
+                clearScores
+            );
+
+        const difficultySelect =
+            document.getElementById(
+                'difficulty'
+            );
+
+        if (difficultySelect) {
+
+            difficultySelect.addEventListener(
+                'change',
+                newGame
+            );
+        }
+
+        renderScores();
+
+        newGame();
+    }
+);
